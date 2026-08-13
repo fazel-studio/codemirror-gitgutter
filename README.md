@@ -10,6 +10,10 @@ renders colored gutter markers (added / modified / deleted), and opens an
 in-editor **peek view** when a marker is clicked — complete with
 Stage / Revert / Next / Previous controls.
 
+<p align="center">
+  <img src="previews/gitGutter.png" alt="Git gutter with peek view" />
+</p>
+
 ## Highlights
 
 - **Plug-and-play**: a single `gitGutter(config)` call returns a ready-to-mount

@@ -91,21 +91,32 @@ export const gitGutterTheme = EditorView.baseTheme({
   // ── Peek view widget ────────────────────────────────────────────────────────
   //
   // Fully transparent: the editor background shows through, so the peek always
-  // matches whatever theme the host uses. `peekWidth` caps the width at the
-  // visible editor area via `--cm-gitgutter-peek-max-width` so the widget
-  // stops before a minimap instead of running to the editor's edge.
+  // matches whatever theme the host uses. The peek is a block widget inside
+  // `.cm-content` (sized `width: max-content`, i.e. the longest line). To
+  // replicate the VSCode inline diff:
+  //
+  // - `position: sticky; left: var(--cm-gitgutter-peek-left)` pins the peek
+  //   to the *viewport* horizontally — scrolling the document sideways does
+  //   NOT move the peek, only scrolling vertically does (it scrolls like a
+  //   normal block in the document flow).
+  // - `width` is the exact pixel value measured by the `peekWidth` plugin
+  //   (`--cm-gitgutter-peek-max-width`), equal to the visible editor width
+  //   and stopping flush before a right-side minimap when one is present.
+  //   The pane inside remains individually horizontally scrollable when a
+  //   diff line is wider than the peek.
 
   '.cm-gitgutter-peek': {
     backgroundColor: 'transparent',
     borderTop: '1px solid var(--cm-gitgutter-peek-border, color-mix(in srgb, currentColor 12%, transparent))',
     borderBottom: '1px solid var(--cm-gitgutter-peek-border, color-mix(in srgb, currentColor 12%, transparent))',
     boxSizing: 'border-box',
-    width: '100%',
-    maxWidth: 'var(--cm-gitgutter-peek-max-width, none)',
+    position: 'sticky',
+    left: 'var(--cm-gitgutter-peek-left, 0px)',
+    width: 'var(--cm-gitgutter-peek-max-width, 100%)',
+    maxWidth: 'var(--cm-gitgutter-peek-max-width, 100%)',
     overflow: 'hidden',
     fontSize: '13px',
     borderRadius: '0',
-    position: 'relative',
     height: 'calc(33px + 8 * 1.5em)', // 33px toolbar + 8 lines
   },
 

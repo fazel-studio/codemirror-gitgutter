@@ -1,105 +1,171 @@
 import { ViewPlugin } from '@codemirror/view';
 import type { ViewUpdate, EditorView } from '@codemirror/view';
-import { activePeekField, openPeekEffect } from './peekState';
+import { activePeekField } from './peekState';
 
 /**
- * CSS custom property set on the editor element (`view.dom`) with the largest
- * width (in px) the peek view may occupy. Falls back to the full visible
- * editor width when no minimap/overlay is present.
- */
-const PEEK_MAX_WIDTH_VAR = '--cm-gitgutter-peek-max-width';
-
-/**
- * Computes the maximum width the peek view may use by measuring the visible
- * editor area. Any overlay anchored to the editor's right edge (e.g. a
- * minimap) shortens the available width — mirroring VSCode, where the inline
- * diff peek never tucks underneath the minimap.
+ * CSS custom properties set on the editor element (`view.dom`) that drive the
+ * peek view's layout:
  *
- * Works regardless of whether the minimap is a native flex gutter or an
- * absolutely positioned overlay: we only care about pixels actually occupied
- * on the right side of the visible scroller.
- *
- * @returns the available max width in CSS pixels.
+ * - `--cm-gitgutter-peek-left`: horizontal offset from the scroller's left
+ *   edge where the peek is pinned (the content's left at scrollLeft = 0,
+ *   i.e. gutter width + padding). Because the peek is `position: sticky;
+ *   left: <this>`, it stays glued to the *viewport* while the document is
+ *   scrolled horizontally — the VSCode behavior, where the diff peek never
+ *   scrolls away with the code.
+ * - `--cm-gitgutter-peek-max-width`: the exact pixel width the peek box may
+ *   occupy. It is measured from the visible editor area (the viewport), not
+ *   the document, and stops flush before any right-side overlay such as a
+ *   minimap.
  */
-export function computePeekMaxWidth(view: EditorView): number {
-  const editorRect = view.scrollDOM.getBoundingClientRect();
-  const overlay = findRightOverlay(view);
+const PEEK_LEFT_VAR = '--cm-gitgutter-peek-left';
+const PEEK_WIDTH_VAR = '--cm-gitgutter-peek-max-width';
 
-  if (overlay) {
-    const rect = overlay.getBoundingClientRect();
-    const available = Math.floor(rect.left - editorRect.left);
-    // Guard against degenerate measurements (overlay covering everything).
-    if (available > 0) return available;
-  }
+/** Tolerance in px for "this element sits at/ near the editor's right edge". */
+const RIGHT_EDGE_TOLERANCE = 50;
 
-  return Math.max(0, Math.floor(editorRect.width));
+export interface PeekLayout {
+  /** Horizontal offset from the scroller's left edge where the peek is pinned. */
+  left: number;
+  /** Maximum pixel width the peek may occupy. */
+  width: number;
 }
 
 /**
- * Finds the element that visually covers / reserves the right-hand side of the
- * editor, e.g. a minimap overlay. We detect any visible element whose class
- * mentions "minimap" and whose right edge sits flush against the right edge
- * of the visible scroller.
+ * Measures the peek view's desired layout from the visible editor area.
+ *
+ * `left` is the content's left edge when the user is not scrolled horizontally
+ * (stable under horizontal scrolling). `width` fills the remaining visible
+ * area up to the right boundary — either the scroller's right edge, or, when
+ * a minimap/overlay hugs the right side, the overlay's left edge (mirroring
+ * VSCode, where the inline diff peek stops flush before the minimap).
+ *
+ * @returns the layout in CSS pixels.
+ */
+export function computePeekLayout(view: EditorView): PeekLayout {
+  const scrollerRect = view.scrollDOM.getBoundingClientRect();
+  const contentRect = view.contentDOM.getBoundingClientRect();
+
+  // `contentRect.left` shifts by -scrollLeft as the user scrolls horizontally;
+  // adding scrollLeft back gives the content's resting left edge (gutter +
+  // padding), which is where the peek should align at scrollLeft = 0.
+  const contentLeft = contentRect.left + view.scrollDOM.scrollLeft;
+  const left = Math.max(0, Math.round(contentLeft - scrollerRect.left));
+
+  const overlay = findRightOverlay(view);
+  const rightBoundary = overlay ? overlay.getBoundingClientRect().left : scrollerRect.right;
+  const width = Math.max(0, Math.floor(rightBoundary - scrollerRect.left - left));
+
+  return { left, width };
+}
+
+/**
+ * Finds the right-side overlay element that visually reserves space in the
+ * editor (typically a minimap). We detect any visible element whose class
+ * mentions "minimap" and that forms a tall strip hugging the editor's right
+ * side. The leftmost such candidate wins so nested minimap internals don't
+ * confuse the boundary.
+ *
+ * Notron's minimap, for example, is `position: absolute; right: 14px` —
+ * its right edge sits a scrollbar-width short of the editor edge, so we use
+ * a tolerance instead of requiring a flush right edge.
  */
 function findRightOverlay(view: EditorView): HTMLElement | null {
   const editorRect = view.scrollDOM.getBoundingClientRect();
   const candidates = view.dom.querySelectorAll<HTMLElement>('[class*="minimap"]');
 
+  let best: HTMLElement | null = null;
+  let bestLeft = Infinity;
+
   for (const el of candidates) {
-    if (getComputedStyle(el).visibility === 'hidden') continue;
-    if (getComputedStyle(el).display === 'none') continue;
+    if (el.offsetParent === null) continue; // hidden via display:none or detached
     const rect = el.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) continue;
-    // Anchored to the editor's right edge and clearly inset from the left.
-    if (rect.right >= editorRect.right - 4 && rect.left > editorRect.left + 8) {
-      return el;
+
+    const hugsRight = rect.right > editorRect.right - RIGHT_EDGE_TOLERANCE;
+    const isTall = rect.bottom > editorRect.bottom - RIGHT_EDGE_TOLERANCE;
+    const insetLeft = rect.left > editorRect.left + 10;
+
+    if (hugsRight && isTall && insetLeft && rect.left < bestLeft) {
+      best = el;
+      bestLeft = rect.left;
     }
   }
-  return null;
+
+  return best;
 }
 
 /**
- * Keeps `PEEK_MAX_WIDTH_VAR` in sync with the actual editor layout so the
- * peek view width always matches the visible area (and stops before a
- * minimap). Re-measures whenever the peek opens, the geometry changes (resize,
- * scrollbars, minimap show/hide), or the document/selection changes while a
- * peek is open.
+ * Keeps the peek layout CSS variables in sync with the actual editor layout.
+ *
+ * - The value is written synchronously when the peek opens, before the next
+ *   paint, so no content-width flash occurs.
+ * - While a peek is open a cheap animation-frame loop re-measures constantly.
+ *   This covers everything — window resize, scrollbar changes, and minimap
+ *   toggles that only mutate the DOM (e.g. setting `display: none`) without
+ *   producing a CodeMirror state update.
+ * - The properties are removed again when the peek closes so future opens
+ *   start from a clean slate.
  */
 class PeekWidthPlugin {
-  private view: EditorView;
+  private raf: number | null = null;
 
-  constructor(view: EditorView) {
-    this.view = view;
+  constructor(private view: EditorView) {
+    // Baseline so the properties exist (and are correct) even before the
+    // first peek opens — e.g. when the host has already toggled its minimap.
+    this.applyLayout();
   }
 
   update(update: ViewUpdate) {
     const peekOpen = Boolean(update.state.field(activePeekField, false));
 
     if (!peekOpen) {
-      // Restore the default when the peek closes so the first measure after a
-      // re-open starts from a clean slate.
-      this.view.dom.style.removeProperty(PEEK_MAX_WIDTH_VAR);
+      this.stopLoop();
+      this.view.dom.style.removeProperty(PEEK_LEFT_VAR);
+      this.view.dom.style.removeProperty(PEEK_WIDTH_VAR);
       return;
     }
 
-    const toggled = update.transactions.some((tr) =>
-      tr.effects.some((e) => e.is(openPeekEffect)),
-    );
-    if (update.geometryChanged || toggled || update.docChanged || update.selectionSet) {
-      this.measure();
+    // Write the layout synchronously (no rAF wait) so the very first painted
+    // frame of the peek is already constrained to the visible area.
+    this.applyLayout();
+    this.startLoop();
+  }
+
+  private applyLayout() {
+    const { left, width } = computePeekLayout(this.view);
+    this.view.dom.style.setProperty(PEEK_LEFT_VAR, `${left}px`);
+    this.view.dom.style.setProperty(PEEK_WIDTH_VAR, `${width}px`);
+  }
+
+  private startLoop() {
+    if (this.raf != null) return;
+
+    let last = '';
+    const loop = () => {
+      const { left, width } = computePeekLayout(this.view);
+      const key = `${left}:${width}`;
+      if (key !== last) {
+        last = key;
+        this.view.dom.style.setProperty(PEEK_LEFT_VAR, `${left}px`);
+        this.view.dom.style.setProperty(PEEK_WIDTH_VAR, `${width}px`);
+      }
+      this.raf = requestAnimationFrame(loop);
+    };
+
+    this.raf = requestAnimationFrame(loop);
+  }
+
+  private stopLoop() {
+    if (this.raf != null) {
+      cancelAnimationFrame(this.raf);
+      this.raf = null;
     }
   }
 
-  private measure() {
-    this.view.requestMeasure({
-      read: (view) => computePeekMaxWidth(view),
-      write: (width, view) => view.dom.style.setProperty(PEEK_MAX_WIDTH_VAR, `${width}px`),
-      key: PEEK_MAX_WIDTH_VAR,
-    });
-  }
-
   destroy() {
-    this.view.dom.style.removeProperty(PEEK_MAX_WIDTH_VAR);
+    this.stopLoop();
+    this.view.dom.style.removeProperty(PEEK_LEFT_VAR);
+    this.view.dom.style.removeProperty(PEEK_WIDTH_VAR);
   }
 }
 
