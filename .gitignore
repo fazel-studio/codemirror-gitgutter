@@ -1,0 +1,8 @@
+node_modules/
+dist/
+examples/basic/dist/
+*.tsbuildinfo
+.vite/
+coverage/
+*.log
+.DS_Store

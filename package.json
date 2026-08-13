@@ -1,0 +1,73 @@
+{
+  "name": "@fazelstudio/codemirror-gitgutter",
+  "version": "0.1.0",
+  "description": "Git-blame-style inline diff gutter for CodeMirror 6 with a VSCode-like peek view.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "vite",
+    "predev": "npm run build",
+    "prepublishOnly": "npm run build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "publish:dry": "npm publish --dry-run"
+  },
+  "keywords": [
+    "codemirror",
+    "codemirror6",
+    "git",
+    "gutter",
+    "diff",
+    "scm",
+    "dirty-diff",
+    "vscode"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fazelllyyy/codemirror-gitgutter.git"
+  },
+  "homepage": "https://github.com/fazelllyyy/codemirror-gitgutter#readme",
+  "bugs": {
+    "url": "https://github.com/fazelllyyy/codemirror-gitgutter/issues"
+  },
+  "peerDependencies": {
+    "@codemirror/state": "^6.0.0",
+    "@codemirror/view": "^6.0.0"
+  },
+  "dependencies": {
+    "@codemirror/language": "^6.0.0",
+    "diff": "^5.2.0"
+  },
+  "devDependencies": {
+    "@codemirror/lang-javascript": "^6.2.2",
+    "@codemirror/state": "^6.4.1",
+    "@codemirror/view": "^6.27.0",
+    "@types/diff": "^5.2.1",
+    "codemirror": "^6.0.1",
+    "jsdom": "^24.1.0",
+    "tsup": "^8.0.2",
+    "typescript": "^5.4.5",
+    "vite": "^5.3.1",
+    "vitest": "^1.6.0"
+  }
+}

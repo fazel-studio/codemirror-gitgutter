@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@fazelstudio/codemirror-gitgutter — playground</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      body {
+        margin: 0;
+        background: #f5f6f8;
+        color: #24292f;
+      }
+      main {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 24px 16px 64px;
+      }
+      h1 {
+        font-size: 20px;
+        font-weight: 650;
+        margin: 0 0 4px;
+      }
+      p.sub {
+        margin: 0 0 16px;
+        color: #57606a;
+        font-size: 13px;
+      }
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+      .controls button {
+        border: 1px solid #d0d7de;
+        background: #fff;
+        color: #24292f;
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-size: 13px;
+        cursor: pointer;
+      }
+      .controls button:hover {
+        background: #f3f4f6;
+      }
+      #editor {
+        border: 1px solid #d0d7de;
+        border-radius: 8px;
+        overflow: hidden;
+        background: #fff;
+        min-height: 320px;
+      }
+      #editor .cm-editor {
+        font-size: 13px;
+      }
+      #log {
+        background: #0d1117;
+        color: #8b949e;
+        border-radius: 8px;
+        padding: 12px;
+        font-size: 12px;
+        line-height: 1.6;
+        max-height: 180px;
+        overflow: auto;
+        margin: 12px 0 0;
+        white-space: pre-wrap;
+      }
+      .hint {
+        font-size: 12px;
+        color: #57606a;
+        margin-top: 10px;
+      }
+      .hint code {
+        background: #eaeef2;
+        padding: 1px 5px;
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>@fazelstudio/codemirror-gitgutter</h1>
+      <p class="sub">
+        Git-blame-style diff gutter + VSCode-like peek view, driven purely by a baseline string.
+      </p>
+
+      <div class="controls">
+        <button id="btn-modified">Show modified</button>
+        <button id="btn-added">Show added</button>
+        <button id="btn-deleted">Show deleted</button>
+        <button id="btn-mixed">Show mixed</button>
+        <button id="btn-reset">Reset to HEAD</button>
+      </div>
+
+      <div id="editor"></div>
+
+      <p class="hint">
+        Click a colored marker in the gutter to open the peek view. Use
+        <code>Alt-F3</code> / <code>Shift-Alt-F3</code> to jump between changes and
+        <code>Ctrl-Shift-Backspace</code> (Cmd on macOS) to revert the change under the cursor.
+        The <b>Stage</b> button logs a fake staging event below.
+      </p>
+
+      <pre id="log"></pre>
+    </main>
+
+    <script type="module" src="/main.ts"></script>
+  </body>
+</html>
